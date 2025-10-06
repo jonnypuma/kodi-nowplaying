@@ -1,7 +1,7 @@
 This is a script to be run as a Docker container.
 
 It provides a html page showing what a Kodi device is playing and displays artwork, progress bar, media information, plot etc with background slideshow if more than one fanart is found. 
-
+_________________________
 ## Features
 
 - **Real-time Playback Detection**: Automatically detects when Kodi starts/stops playing media
@@ -11,7 +11,7 @@ It provides a html page showing what a Kodi device is playing and displays artwo
 - **Comprehensive Media Support**: Episodes, movies, and music with appropriate artwork
 - **Background Slideshow**: Multiple fanart images for enhanced visual experience
 - **Responsive Design**: Clean, modern interface that works on various screen sizes
-
+_________________________
 ## Playback Controls
 
 The interface includes:
@@ -20,7 +20,7 @@ The interface includes:
 - **Real-time Updates**: Button state updates automatically as you control playback in Kodi
 - **Timer Integration**: Button positioned to the left of the playback timer
 - **Interactive Discart Animation**: Discart (CD/DVD/Bluray artwork) spins during playback and pauses when media is paused
-
+_________________________
 ## Theater-Style Marquee Banner
 
 The interface features a customizable marquee banner that displays the current media title in a theater sign style:
@@ -29,7 +29,7 @@ The interface features a customizable marquee banner that displays the current m
 - **Smooth Animations**: Fade in/out effects when toggling visibility
 - **Responsive Design**: Banner adapts to different screen sizes
 - **Clean Integration**: Seamlessly integrated with the overall design
-
+_________________________
 ### Text Shimmer Effect
 
 The marquee banner includes an elegant text shimmer effect that adds visual interest:
@@ -42,12 +42,13 @@ The marquee banner includes an elegant text shimmer effect that adds visual inte
 - **Consistent Spacing**: Letter spacing remains identical whether effect is active or not
 - **Smooth Transitions**: All animations use CSS transitions for fluid motion
 - **Non-Intrusive**: Effect is subtle enough to not distract from content viewing
-
+_________________________
 ## Media Type Display Features
 
 The application provides specialized displays and artwork for different media types, each optimized for the unique characteristics of TV shows, movies, and music:
-
+_________________________
 ### TV Shows
+
 **Artwork Display:**
 - **Show Poster**: Main TV show poster displayed prominently
 - **Season Artwork**: Season-specific poster when available (shows season number and artwork)
@@ -62,7 +63,7 @@ The application provides specialized displays and artwork for different media ty
 - Show genre and rating
 - Cast information (when available)
 - Playback progress and time remaining
-
+_________________________
 ### Movies
 **Artwork Display:**
 - **Movie Poster**: Primary movie poster with cinematic styling
@@ -79,7 +80,7 @@ The application provides specialized displays and artwork for different media ty
 - Video quality (resolution, codec, HDR type)
 - Audio information (channels, codec)
 - Playback progress and total runtime
-
+_________________________
 ### Music
 **Artwork Display:**
 - **Album Artwork**: Album cover displayed prominently (thumbnail or poster)
@@ -94,7 +95,7 @@ The application provides specialized displays and artwork for different media ty
 - Artist biography (when available from metadata)
 - Album information and track details
 - Playback progress and song duration
-
+_________________________
 ### Artwork Fallback System
 Each media type follows a sophisticated fallback hierarchy to ensure optimal visual presentation:
 
@@ -112,7 +113,7 @@ Each media type follows a sophisticated fallback hierarchy to ensure optimal vis
 1. **ClearArt** → **Banner** → **Text Fallback**
 2. **Album Artwork** (thumbnail/poster) as primary display
 3. **Fanart Collection**: Artist fanart + concert/performance images
-
+_________________________
 ### Artwork Sources
 - **Kodi's Artwork Database**: Primary source for all artwork types
 - **Local Media Folders**: Scans movie/TV/music directories for additional artwork
@@ -121,7 +122,7 @@ Each media type follows a sophisticated fallback hierarchy to ensure optimal vis
 - **Seamless Fallbacks**: Transitions between artwork types are smooth and automatic
 - **Quality Priority**: Always displays the highest quality artwork available
 - **Responsive Scaling**: All artwork types scale appropriately for different screen sizes
-
+_________________________
 ### Background Slideshow
 When multiple fanart images are available:
 - **Automatic Rotation**: Cycles through all available fanart images
@@ -130,17 +131,17 @@ When multiple fanart images are available:
 - **Dynamic Detection**: Automatically detects and uses all available fanart images
 - **Extrafanart Support**: Scans `extrafanart/` subdirectories to find additional background images
 - **Comprehensive Collection**: Includes fanart from both main directory and extrafanart folders for maximum variety
-
+_________________________
 ## Setup
 
-Make sure Kodi has web control enabled
+Ensure Kodi has web control enabled
 
 Unzip kodi-nowplaying.zip 
 
 Edit the .env file and input the ip to your Kodi device, HTTP port and user/pass.
 
 OPTIONAL: Create fallback and edit the kodi-nowplaying.py file and enter Kodi IP and user/pass there:
-# Kodi connection details
+
 ```
 KODI_HOST = os.getenv("KODI_HOST", "http://kodi_device_ip:kodi_port")
 
@@ -149,15 +150,18 @@ KODI_USER = os.getenv("KODI_USER", "kodi_HTTP_username")
 KODI_PASS = os.getenv("KODI_PASS", "kodi_HTTP_password")
 ```
 _________________________
+## Build and start container:
+```
+docker compose build --no-cache kodi-nowplaying
 
-Build and start container:
-```docker compose build --no-cache kodi-nowplaying```
-```docker compose up -d kodi-nowplaying```
-
-Start playing media on your Kodi device
+docker compose up -d kodi-nowplaying
+```
+_________________________
+## Start playing media on your Kodi device
 
 Test locally by visiting http://localhost:5001/nowplaying <- or replace localhost with the IP of the container host
 
 Mount it as a custom Homarr iframe tile pointing to http://localhost:5001/nowplaying <- or replace localhost with the IP of the container host
+
 
 
