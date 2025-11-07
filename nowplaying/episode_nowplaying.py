@@ -183,17 +183,37 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
     audio_language_infolabel = enhanced_video_info.get("VideoPlayer.AudioLanguage", "")
     subtitle_language_infolabel = enhanced_video_info.get("VideoPlayer.SubtitlesLanguage", "")
     
-    # Get all available languages from streamdetails
+    # Language code normalization mapping
+    language_normalization = {
+        'GER': 'DEU',  # German: ger -> deu
+        'ENG': 'ENG',  # English: eng -> eng
+        'FRE': 'FRA',  # French: fre -> fra
+        'SPA': 'SPA',  # Spanish: spa -> spa
+        'ITA': 'ITA',  # Italian: ita -> ita
+        'POR': 'POR',  # Portuguese: por -> por
+        'RUS': 'RUS',  # Russian: rus -> rus
+        'JPN': 'JPN',  # Japanese: jpn -> jpn
+        'KOR': 'KOR',  # Korean: kor -> kor
+        'CHI': 'CHI',  # Chinese: chi -> chi
+    }
+    
+    # Get all available languages from streamdetails and normalize them
     all_audio_languages = sorted(set(
-        a.get("language", "")[:3].upper() for a in audio_info if a.get("language")
+        language_normalization.get(a.get("language", "")[:3].upper(), a.get("language", "")[:3].upper()) 
+        for a in audio_info if a.get("language")
     ))
     all_subtitle_languages = sorted(set(
-        s.get("language", "")[:3].upper() for s in subtitle_info if s.get("language")
+        language_normalization.get(s.get("language", "")[:3].upper(), s.get("language", "")[:3].upper()) 
+        for s in subtitle_info if s.get("language")
     ))
     
-    # Current playing languages (for default display)
+    # Current playing languages (for default display) - normalize immediately
     current_audio = audio_language_infolabel[:3].upper() if audio_language_infolabel else (all_audio_languages[0] if all_audio_languages else "N/A")
     current_subtitle = subtitle_language_infolabel[:3].upper() if subtitle_language_infolabel else (all_subtitle_languages[0] if all_subtitle_languages else "N/A")
+    
+    # Normalize current language codes to match streamdetails format
+    current_audio = language_normalization.get(current_audio, current_audio)
+    current_subtitle = language_normalization.get(current_subtitle, current_subtitle)
     
     print(f"[DEBUG] Episode current audio: {current_audio}, all audio: {all_audio_languages}", flush=True)
     print(f"[DEBUG] Episode current subtitle: {current_subtitle}, all subtitle: {all_subtitle_languages}", flush=True)
@@ -397,6 +417,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           display: flex;
           gap: 40px;
           color: white;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.6);
         }}
         .left-section {{
           display: flex;
@@ -489,6 +510,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           border-radius: 20px;
           font-size: 0.8em;
           box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+          text-shadow: none;
         }}
         
         .expandable-language {{
@@ -522,6 +544,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           padding: 2px 4px;
           border-radius: 3px;
           margin: 0 1px;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.6);
         }}
         .episode-badges {{
           display: flex;
@@ -537,6 +560,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           font-size: 1.0em;
           font-weight: bold;
           box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+          text-shadow: 0 1px 3px rgba(0,0,0,0.6);
         }}
         .badge-imdb {{
           display: flex;
@@ -964,6 +988,8 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
 
         let lastItemId = null;
         let lastPausedState = null;
+        let lastAudioLang = null;
+        let lastSubtitleLang = null;
         let cachedButton = null;
         let buttonUpdateInProgress = false;
         
@@ -1082,6 +1108,36 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           }}
         }}
         
+        function updateLanguageBadge(type, newLanguage) {{
+          const badge = document.querySelector(`.badge[data-type="${{type}}"]`);
+          if (badge) {{
+            const currentLangSpan = badge.querySelector('.current-lang');
+            if (currentLangSpan) {{
+              currentLangSpan.textContent = newLanguage;
+              console.log(`[DEBUG] Updated ${{type}} badge to ${{newLanguage}}`);
+            }}
+            
+            // Update the data-current attribute
+            badge.dataset.current = newLanguage;
+            
+            // If the badge is expanded, update the highlighted language
+            if (badge.classList.contains('expanded')) {{
+              const allLangsSpan = badge.querySelector('.all-langs');
+              if (allLangsSpan) {{
+                const allLangsText = badge.dataset.all;
+                const languages = allLangsText.split(', ');
+                const highlightedLangs = languages.map(lang => {{
+                  const isActive = lang.trim() === newLanguage.trim();
+                  return isActive ? `<span class="active-language">${{lang}}</span>` : lang;
+                }}).join(', ');
+                
+                allLangsSpan.innerHTML = highlightedLangs;
+                console.log(`[DEBUG] Updated expanded ${{type}} badge highlighting`);
+              }}
+            }}
+          }}
+        }}
+        
         function checkPlaybackChange() {{
           fetch('/poll_playback')
             .then(res => {{
@@ -1094,8 +1150,10 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
               const currentState = data.playing;
               const currentItemId = data.item_id;
               const currentPaused = data.paused;
+              const currentAudioLang = data.current_audio_lang || '';
+              const currentSubtitleLang = data.current_subtitle_lang || '';
               
-              console.log(`[DEBUG] Poll result: playing=${{currentState}}, item_id=${{currentItemId}}, lastItemId=${{lastItemId}}, paused=${{currentPaused}}`);
+              console.log(`[DEBUG] Poll result: playing=${{currentState}}, item_id=${{currentItemId}}, lastItemId=${{lastItemId}}, paused=${{currentPaused}}, audio=${{currentAudioLang}}, subtitle=${{currentSubtitleLang}}`);
               
               // Update playback button based on pause state
               if (currentPaused !== lastPausedState) {{
@@ -1103,13 +1161,28 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
                 lastPausedState = currentPaused;
               }}
               
+              // Check for language changes and update badges
+              if (currentAudioLang && currentAudioLang !== lastAudioLang) {{
+                console.log(`[DEBUG] Audio language changed from ${{lastAudioLang}} to ${{currentAudioLang}}`);
+                updateLanguageBadge('audio', currentAudioLang);
+                lastAudioLang = currentAudioLang;
+              }}
+              
+              if (currentSubtitleLang && currentSubtitleLang !== lastSubtitleLang) {{
+                console.log(`[DEBUG] Subtitle language changed from ${{lastSubtitleLang}} to ${{currentSubtitleLang}}`);
+                updateLanguageBadge('subtitle', currentSubtitleLang);
+                lastSubtitleLang = currentSubtitleLang;
+              }}
+              
               // Check for playback state change (start/stop)
               if (lastPlaybackState === null) {{
                 lastPlaybackState = currentState;
                 lastItemId = currentItemId;
                 lastPausedState = currentPaused;
+                lastAudioLang = currentAudioLang;
+                lastSubtitleLang = currentSubtitleLang;
                 updatePlaybackButton(currentPaused);
-                console.log(`[DEBUG] Initial state set: lastPlaybackState=${{lastPlaybackState}}, lastItemId=${{lastItemId}}, lastPausedState=${{lastPausedState}}`);
+                console.log(`[DEBUG] Initial state set: lastPlaybackState=${{lastPlaybackState}}, lastItemId=${{lastItemId}}, lastPausedState=${{lastPausedState}}, audio=${{lastAudioLang}}, subtitle=${{lastSubtitleLang}}`);
               }} else if (currentState !== lastPlaybackState) {{
                 console.log(`[DEBUG] Playback state changed from ${{lastPlaybackState}} to ${{currentState}}`);
                 document.body.classList.add('fade-out');

@@ -170,7 +170,7 @@ def poll_playback():
                 except Exception as e:
                     print(f"[DEBUG] Failed to check episode: {e}", flush=True)
             
-            # Get player properties to check pause state
+            # Get player properties to check pause state and current languages
             active_players = players.get("result", [])
             if active_players:
                 player_id = active_players[0].get("playerid")
@@ -183,17 +183,56 @@ def poll_playback():
                     speed = progress_response.get("result", {}).get("speed", 0)
                 
                 is_paused = speed == 0
+                
+                # Get current language information
+                try:
+                    language_response = kodi_rpc("XBMC.GetInfoLabels", {
+                        "labels": ["VideoPlayer.AudioLanguage", "VideoPlayer.SubtitlesLanguage"]
+                    })
+                    current_audio_lang = ""
+                    current_subtitle_lang = ""
+                    if language_response and language_response.get("result"):
+                        result = language_response.get("result", {})
+                        current_audio_lang = result.get("VideoPlayer.AudioLanguage", "")[:3].upper()
+                        current_subtitle_lang = result.get("VideoPlayer.SubtitlesLanguage", "")[:3].upper()
+                        
+                        # Apply language normalization
+                        language_normalization = {
+                            'GER': 'DEU',  # German: ger -> deu
+                            'ENG': 'ENG',  # English: eng -> eng
+                            'FRE': 'FRA',  # French: fre -> fra
+                            'SPA': 'SPA',  # Spanish: spa -> spa
+                            'ITA': 'ITA',  # Italian: ita -> ita
+                            'POR': 'POR',  # Portuguese: por -> por
+                            'RUS': 'RUS',  # Russian: rus -> rus
+                            'JPN': 'JPN',  # Japanese: jpn -> jpn
+                            'KOR': 'KOR',  # Korean: kor -> kor
+                            'CHI': 'CHI',  # Chinese: chi -> chi
+                        }
+                        
+                        current_audio_lang = language_normalization.get(current_audio_lang, current_audio_lang)
+                        current_subtitle_lang = language_normalization.get(current_subtitle_lang, current_subtitle_lang)
+                        
+                        print(f"[DEBUG] Current languages - Audio: {current_audio_lang}, Subtitle: {current_subtitle_lang}", flush=True)
+                except Exception as e:
+                    print(f"[DEBUG] Failed to get current languages: {e}", flush=True)
+                    current_audio_lang = ""
+                    current_subtitle_lang = ""
             else:
                 is_paused = False
+                current_audio_lang = ""
+                current_subtitle_lang = ""
             
-            # Return current episode ID (stable) with pause state
+            # Return current episode ID (stable) with pause state and language info
             if last_known_episode:
                 print(f"[DEBUG] Poll playback - Returning playing: True, item: {last_known_episode}", flush=True)
                 return jsonify({
                     "playing": True, 
                     "paused": is_paused,
                     "item_id": last_known_episode,
-                    "item_type": "episode"
+                    "item_type": "episode",
+                    "current_audio_lang": current_audio_lang,
+                    "current_subtitle_lang": current_subtitle_lang
                 })
             else:
                 print(f"[DEBUG] No episode info available, returning episode_unknown", flush=True)
@@ -202,7 +241,9 @@ def poll_playback():
                     "playing": True, 
                     "paused": is_paused,
                     "item_id": "episode_unknown",
-                    "item_type": "episode"
+                    "item_type": "episode",
+                    "current_audio_lang": current_audio_lang,
+                    "current_subtitle_lang": current_subtitle_lang
                 })
             
         # No active players - reset tracking variables

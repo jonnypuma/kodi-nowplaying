@@ -383,6 +383,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           backdrop-filter: blur(5px);
           box-shadow: 0 8px 32px rgba(0,0,0,0.8);
           color: white;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.6);
         }}
         .three-column-layout {{
           display: flex;
@@ -534,6 +535,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           border-radius: 20px;
           font-size: 0.8em;
           box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+          text-shadow: none;
         }}
         .badge-imdb {{
           display: flex;
@@ -612,6 +614,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           font-size: 1.0em;
           font-weight: bold;
           box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+          text-shadow: 0 1px 3px rgba(0,0,0,0.6);
         }}
         .album-title {{
           font-size: 1.2em;
