@@ -95,6 +95,30 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
     cdart_url = f"/media/{downloaded_art.get('cdart')}" if downloaded_art.get("cdart") else ""
     # Use discart if available, otherwise use cdart
     discart_display_url = discart_url if discart_url else cdart_url
+    back_cover_path = ""
+    if isinstance(downloaded_art, dict):
+        priority_back_keys = ["back", "backcover", "rear", "rearcover"]
+        for back_key in priority_back_keys:
+            if downloaded_art.get(back_key):
+                back_cover_path = downloaded_art.get(back_key)
+                break
+        if not back_cover_path:
+            for key, value in downloaded_art.items():
+                if not value or not isinstance(value, str):
+                    continue
+                key_lower = str(key).lower()
+                value_lower = value.lower()
+                if "background" in key_lower or "background" in value_lower:
+                    continue
+                if "back" in key_lower or "backcover" in key_lower or "rear" in key_lower:
+                    back_cover_path = value
+                    break
+                if "back" in value_lower or "rear" in value_lower:
+                    back_cover_path = value
+                    break
+    back_cover_url = f"/media/{back_cover_path}" if back_cover_path else ""
+    if back_cover_path:
+        print(f"[DEBUG] Back cover detected: {back_cover_path}", flush=True)
     # Only use banner if it's not actually a fanart image
     banner_url = ""
     if downloaded_art.get("banner"):
@@ -383,7 +407,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           backdrop-filter: blur(5px);
           box-shadow: 0 8px 32px rgba(0,0,0,0.8);
           color: white;
-          text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+          text-shadow: 0 2px 6px rgba(0,0,0,0.7), 0 0 8px rgba(0,0,0,0.5);
         }}
         .three-column-layout {{
           display: flex;
@@ -456,33 +480,103 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
         .poster-container {{
           position: relative;
           overflow: visible;
-          height: 240px;
-          width: auto;
+          height: 260px;
+          width: 240px;
           margin-top: 60px;
+          perspective: 1200px;
+          box-sizing: border-box;
+        }}
+        .poster-container.flip-enabled .album-flip {{
+          cursor: pointer;
+        }}
+        .poster-container.flip-enabled {{
+          padding-top: 20px;
+        }}
+        .poster-container:not(.flip-enabled) .poster {{
+          margin-top: 20px;
         }}
         .poster {{
           height: 240px;
+          width: 240px;
           border-radius: 8px;
           box-shadow: 0 2px 8px rgba(0,0,0,0.6);
           position: relative;
           z-index: 2;
+          object-fit: cover;
+          cursor: zoom-in !important;
+        }}
+        .poster-container.flip-enabled .poster {{
+          position: absolute;
+          top: 0;
+          left: 0;
+          z-index: 2;
+          backface-visibility: hidden;
+        }}
+        .poster-container.flip-enabled .poster.back-face {{
+          transform: rotateY(180deg);
+        }}
+        .album-flip {{
+          position: relative;
+          width: 100%;
+          height: 100%;
+          transform-style: preserve-3d;
+          transition: transform 0.8s ease;
+          z-index: 2;
+        }}
+        .poster-container.flip-enabled .album-flip {{
           margin-top: 20px;
+        }}
+        .poster-container.flip-enabled .album-flip:focus {{
+          outline: none;
+          box-shadow: 0 0 0 3px rgba(76,175,80,0.6);
+          border-radius: 8px;
+        }}
+        .album-flip.flipped {{
+          transform: rotateY(180deg);
+        }}
+        .flip-indicator {{
+          position: absolute;
+          bottom: 6px;
+          right: 6px;
+          background: rgba(0,0,0,0.6);
+          color: white;
+          font-size: 0.75em;
+          padding: 4px 10px;
+          border-radius: 12px;
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+          z-index: 5;
+        }}
+        .poster-container.flip-enabled:hover .flip-indicator,
+        .poster-container.flip-enabled:focus-within .flip-indicator {{
+          opacity: 1;
         }}
         .discart-wrapper {{
           position: absolute;
-          top: -80px;
+          top: -95px;
           left: 50%;
-          transform: translateX(-50%);
+          transform: translate(-50%, 0);
           z-index: 1;
-          height: 140px;
-          width: 180px;
+          height: 220px;
+          width: 220px;
+          pointer-events: none;
+          transition: transform 0.35s ease, opacity 0.35s ease;
         }}
         .discart {{
-          width: 180px;
-          animation: spin 4s linear infinite;
+          width: 220px;
+          animation: spin 6s linear infinite;
           animation-play-state: running;
           opacity: 1;
           filter: drop-shadow(0 0 4px rgba(0,0,0,0.6));
+          pointer-events: none;
+        }}
+        .discart-wrapper.retracted {{
+          transform: translate(-50%, 60px) scale(0.75);
+          opacity: 0;
+        }}
+        .discart-wrapper.retracted .discart {{
+          animation-play-state: paused;
         }}
         .discart.paused {{
           animation-play-state: paused;
@@ -549,6 +643,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           box-shadow: 0 2px 6px rgba(0,0,0,0.4);
           text-decoration: none;
           font-weight: bold;
+          text-shadow: none !important;
         }}
         .badge-imdb img {{
           height: 14px;
@@ -860,6 +955,36 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
         
         .content.non-blurred {{
           backdrop-filter: none;
+        }}
+
+        /* Poster Zoom Overlay */
+        .poster-zoom-overlay {{
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.85);
+          display: none;
+          align-items: center;
+          justify-content: center;
+          z-index: 2000;
+        }}
+        .poster-zoom-overlay.visible {{
+          display: flex;
+        }}
+        .poster-zoom-image {{
+          max-width: 80vw;
+          max-height: 80vh;
+          border-radius: 10px;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.9);
+          transform: scale(0.7);
+          opacity: 0;
+          transition: transform 0.25s ease-out, opacity 0.25s ease-out;
+        }}
+        .poster-zoom-overlay.visible .poster-zoom-image {{
+          transform: scale(1);
+          opacity: 1;
+        }}
+        .poster-zoom-overlay img {{
+          object-fit: contain;
         }}
       </style>
       <script>
@@ -1208,6 +1333,74 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
             }}
           }}, 10000); // 10 seconds for testing
         }}
+
+        function initializeAlbumFlip() {{
+          const flipContainer = document.querySelector('.album-flip');
+          if (!flipContainer) {{
+            return;
+          }}
+
+          let flipped = false;
+          let isAnimating = false;
+          const container = flipContainer.closest('.poster-container');
+          const indicator = container ? container.querySelector('.flip-indicator') : null;
+          const discartWrapper = document.querySelector('.discart-wrapper');
+          const retractDuration = 280;
+          const flipDuration = 800;
+
+          const updateIndicator = () => {{
+            if (indicator) {{
+              indicator.textContent = flipped ? 'Show Front' : 'Show Back';
+            }}
+            flipContainer.setAttribute('aria-pressed', flipped ? 'true' : 'false');
+          }};
+
+          const toggleFlip = (event) => {{
+            if (isAnimating) {{
+              return;
+            }}
+            isAnimating = true;
+
+            if (discartWrapper) {{
+              discartWrapper.classList.add('retracted');
+            }}
+
+            setTimeout(() => {{
+              flipped = !flipped;
+              flipContainer.classList.toggle('flipped', flipped);
+              updateIndicator();
+            }}, retractDuration);
+
+            if (discartWrapper) {{
+              setTimeout(() => {{
+                discartWrapper.classList.remove('retracted');
+              }}, retractDuration + flipDuration);
+            }}
+
+            setTimeout(() => {{
+              isAnimating = false;
+              if (event && event.type === 'click') {{
+                flipContainer.blur();
+              }}
+            }}, retractDuration + flipDuration + 100);
+          }};
+
+          updateIndicator();
+
+          // Use double-click for flip to avoid conflict with zoom (single-click)
+          flipContainer.addEventListener('dblclick', (event) => {{
+            event.preventDefault();
+            event.stopPropagation();
+            toggleFlip(event);
+          }});
+
+          flipContainer.addEventListener('keydown', (event) => {{
+            if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar' || event.key === 'Space') {{
+              event.preventDefault();
+              toggleFlip(event);
+            }}
+          }});
+        }}
         
         // Wait for DOM to be ready before initializing
         function waitForDOM() {{
@@ -1223,6 +1416,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           setTimeout(() => {{
             initializeButton();
             startShimmerTimer();
+            initializeAlbumFlip();
           }}, 200);
         }}
         
@@ -1268,6 +1462,84 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
         
         // Initialize blur toggle on page load
         setTimeout(initializeBlurToggle, 100);
+
+        // Poster Zoom Logic
+        (function() {{
+          function setupPosterZoom() {{
+            const posters = document.querySelectorAll('img.poster, img.show-poster, img.season-poster');
+            if (!posters.length) return;
+
+            let overlay = document.querySelector('.poster-zoom-overlay');
+            if (!overlay) {{
+              overlay = document.createElement('div');
+              overlay.className = 'poster-zoom-overlay';
+              overlay.innerHTML = '<img class="poster-zoom-image" src="" alt="Expanded artwork">';
+              document.body.appendChild(overlay);
+            }}
+
+            const overlayImg = overlay.querySelector('.poster-zoom-image');
+
+            function openOverlay(src, alt) {{
+              if (!src) return;
+              overlayImg.src = src;
+              overlayImg.alt = alt || 'Expanded artwork';
+              overlay.classList.add('visible');
+            }}
+
+            function closeOverlay() {{
+              overlay.classList.remove('visible');
+              overlayImg.src = '';
+            }}
+
+            posters.forEach(poster => {{
+              // Skip non-image fallback icons if any are marked with .no-image
+              if (poster.classList.contains('no-image')) return;
+              
+              // Track click timing to prevent zoom on double-click
+              let lastClickTime = 0;
+              let clickTimeout = null;
+              
+              poster.addEventListener('click', (e) => {{
+                const currentTime = Date.now();
+                const timeSinceLastClick = currentTime - lastClickTime;
+                
+                // If this is a double-click (within 300ms), don't zoom
+                if (timeSinceLastClick < 300) {{
+                  clearTimeout(clickTimeout);
+                  lastClickTime = 0;
+                  return;
+                }}
+                
+                // Otherwise, wait a bit to see if a second click comes
+                lastClickTime = currentTime;
+                clearTimeout(clickTimeout);
+                
+                clickTimeout = setTimeout(() => {{
+                  // Single-click confirmed - zoom
+                  e.stopPropagation();
+                  openOverlay(poster.src, poster.alt);
+                  lastClickTime = 0;
+                }}, 300);
+              }});
+            }});
+
+            overlay.addEventListener('click', () => {{
+              closeOverlay();
+            }});
+
+            document.addEventListener('keydown', (e) => {{
+              if (e.key === 'Escape') {{
+                closeOverlay();
+              }}
+            }});
+          }}
+
+          if (document.readyState === 'loading') {{
+            document.addEventListener('DOMContentLoaded', setupPosterZoom);
+          }} else {{
+            setupPosterZoom();
+          }}
+        }})();
       </script>
     </head>
     <body>
@@ -1295,9 +1567,15 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
         <div class="three-column-layout">
           <!-- Left Column: Album Cover and Discart -->
           <div class="column-left">
-            <div class="poster-container">
+            <div class="poster-container{' flip-enabled' if back_cover_url else ''}">
               {"<div class='discart-wrapper'><img class='discart' src='" + discart_display_url + "' /></div>" if discart_display_url else ""}
-              {f"<img class='poster' src='{album_poster_url}' />" if album_poster_url else ""}
+              {(
+                f"<div class='album-flip' role='button' tabindex='0' aria-pressed='false' aria-label='Flip album cover'>"
+                f"<img class='poster front-face' src='{album_poster_url}' alt='Album front cover' />"
+                f"<img class='poster back-face' src='{back_cover_url}' alt='Album back cover' />"
+                "</div>"
+                "<div class='flip-indicator'>Show Back</div>"
+              ) if album_poster_url and back_cover_url else (f"<img class='poster' src='{album_poster_url}' alt='Album front cover' />" if album_poster_url else "")}
               {f"<img class='clearart' src='{clearart_url}' />" if clearart_url else ""}
             </div>
           </div>

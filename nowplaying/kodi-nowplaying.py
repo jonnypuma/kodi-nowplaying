@@ -14,7 +14,7 @@ KODI_PASS = os.getenv("KODI_PASS", "your_Kodi_password")
 AUTH = (KODI_USER, KODI_PASS) if KODI_USER else None
 HEADERS = {"Content-Type": "application/json"}
 
-ART_TYPES = ["poster", "fanart", "clearlogo", "clearart", "discart", "cdart", "banner", "season.poster", "thumbnail"]
+ART_TYPES = ["poster", "back", "fanart", "clearlogo", "clearart", "discart", "cdart", "banner", "season.poster", "thumbnail"]
 
 # Global variables to track episode transitions and prevent reload loops
 last_known_episode = None
@@ -325,6 +325,94 @@ def prepare_and_download_art(item, session_id):
     print(f"[DEBUG] Found fanart variants: {list(fanart_variants.keys())}", flush=True)
     print(f"[DEBUG] Total fanart variants found: {len(fanart_variants)}", flush=True)
     
+    # For music, try to find common front cover files if Kodi provided audio file instead of image
+    def _is_image_path(path: str) -> bool:
+        if not path:
+            return False
+        lowered = path.lower()
+        return lowered.endswith((".jpg", ".jpeg", ".png", ".webp"))
+
+    def _clean_image_protocol(path: str) -> str:
+        if not path:
+            return ""
+        cleaned = path
+        if cleaned.startswith("image://"):
+            cleaned = urllib.parse.unquote(cleaned[len("image://"):])
+        return cleaned.rstrip("/")
+
+    if item.get("type") == "song" and item.get("file"):
+        current_file = item.get("file", "")
+        album_dir = os.path.dirname(current_file.rstrip("/"))
+
+        # Determine if Kodi gave us a proper image thumbnail
+        kodi_thumbnail = art_map.get("thumbnail") or art_map.get("thumb") or art_map.get("album.thumb")
+        cleaned_thumbnail = _clean_image_protocol(kodi_thumbnail)
+        has_valid_cover = _is_image_path(cleaned_thumbnail)
+
+        if not has_valid_cover:
+            front_cover_candidates = {
+                "folder", "cover", "thumb", "front", "album", "artist",
+                "frontcover", "albumcover", "cd", "cdcover"
+            }
+
+            def find_cover(start_dir: str, max_depth: int = 3) -> str:
+                checked = set()
+                current_dir = start_dir
+
+                for depth in range(max_depth + 1):
+                    if not current_dir or current_dir in checked:
+                        break
+                    checked.add(current_dir)
+                    try:
+                        dir_response = kodi_rpc("Files.GetDirectory", {
+                            "directory": current_dir,
+                            "properties": ["file"]
+                        })
+
+                        if dir_response and dir_response.get("result") and not dir_response.get("error"):
+                            files = dir_response.get("result", {}).get("files", [])
+                            print(f"[DEBUG] Music cover scan (depth {depth}) found {len(files)} files in {current_dir}", flush=True)
+
+                            for file_info in files:
+                                if not isinstance(file_info, dict):
+                                    continue
+                                file_path = file_info.get("file", "")
+                                file_type = file_info.get("filetype", "")
+                                if file_type != "file" or not file_path:
+                                    continue
+
+                                lower_path = file_path.lower()
+                                if not lower_path.endswith((".jpg", ".jpeg", ".png", ".webp")):
+                                    continue
+
+                                base_name = os.path.basename(lower_path)
+                                name_without_ext, _ = os.path.splitext(base_name)
+
+                                if (name_without_ext in front_cover_candidates or
+                                        any(candidate in name_without_ext for candidate in front_cover_candidates)):
+                                    print(f"[DEBUG] Found fallback album cover at depth {depth}: {file_path}", flush=True)
+                                    return file_path
+                        else:
+                            print(f"[DEBUG] Music cover directory scan failed for {current_dir}: {dir_response}", flush=True)
+                    except Exception as scan_error:
+                        print(f"[DEBUG] Error scanning directory {current_dir} for cover art: {scan_error}", flush=True)
+
+                    # Move one level up
+                    parent_dir = os.path.dirname(current_dir.rstrip("/"))
+                    if parent_dir == current_dir:
+                        break
+                    current_dir = parent_dir
+
+                return ""
+
+            potential_cover = find_cover(album_dir)
+            if potential_cover:
+                art_map["thumbnail"] = potential_cover
+                art_map["thumb"] = potential_cover
+                print(f"[DEBUG] Using fallback music thumbnail: {potential_cover}", flush=True)
+            else:
+                print(f"[DEBUG] No fallback album cover found for {album_dir}", flush=True)
+
     # For movies and episodes, try to find additional fanart files in the media folder
     if item.get("type") in ["movie", "episode"] and item.get("file"):
         current_file = item.get("file", "")

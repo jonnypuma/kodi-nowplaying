@@ -351,7 +351,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           display: flex;
           gap: 40px;
           color: white;
-          text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+          text-shadow: 0 2px 6px rgba(0,0,0,0.7), 0 0 8px rgba(0,0,0,0.5);
         }}
         .poster-container {{
           position: relative;
@@ -366,10 +366,11 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           box-shadow: 0 2px 8px rgba(0,0,0,0.6);
           position: relative;
           z-index: 2;
+          cursor: zoom-in;
         }}
         .discart-wrapper {{
           position: absolute;
-          top: -105px;
+          top: -155px;
           left: 50%;
           transform: translateX(-50%);
           z-index: 1;
@@ -378,7 +379,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
         }}
         .discart {{
           width: 280px;
-          animation: spin 4s linear infinite;
+          animation: spin 6s linear infinite;
           animation-play-state: running;
           opacity: 1;
           filter: drop-shadow(0 0 4px rgba(0,0,0,0.6));
@@ -500,6 +501,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           box-shadow: 0 2px 6px rgba(0,0,0,0.4);
           text-decoration: none;
           font-weight: bold;
+          text-shadow: none !important;
         }}
         .badge-imdb img {{
           height: 14px;
@@ -764,6 +766,36 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
         
         .content.non-blurred {{
           backdrop-filter: none;
+        }}
+
+        /* Poster Zoom Overlay */
+        .poster-zoom-overlay {{
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.85);
+          display: none;
+          align-items: center;
+          justify-content: center;
+          z-index: 2000;
+        }}
+        .poster-zoom-overlay.visible {{
+          display: flex;
+        }}
+        .poster-zoom-image {{
+          max-width: 80vw;
+          max-height: 80vh;
+          border-radius: 10px;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.9);
+          transform: scale(0.7);
+          opacity: 0;
+          transition: transform 0.25s ease-out, opacity 0.25s ease-out;
+        }}
+        .poster-zoom-overlay.visible .poster-zoom-image {{
+          transform: scale(1);
+          opacity: 1;
+        }}
+        .poster-zoom-overlay img {{
+          object-fit: contain;
         }}
       </style>
       <script>
@@ -1281,6 +1313,62 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
         
         // Initialize blur toggle on page load
         setTimeout(initializeBlurToggle, 100);
+
+        // Poster Zoom Logic
+        (function() {{
+          function setupPosterZoom() {{
+            const posters = document.querySelectorAll('img.poster, img.show-poster, img.season-poster');
+            if (!posters.length) return;
+
+            let overlay = document.querySelector('.poster-zoom-overlay');
+            if (!overlay) {{
+              overlay = document.createElement('div');
+              overlay.className = 'poster-zoom-overlay';
+              overlay.innerHTML = '<img class="poster-zoom-image" src="" alt="Expanded artwork">';
+              document.body.appendChild(overlay);
+            }}
+
+            const overlayImg = overlay.querySelector('.poster-zoom-image');
+
+            function openOverlay(src, alt) {{
+              if (!src) return;
+              overlayImg.src = src;
+              overlayImg.alt = alt || 'Expanded artwork';
+              overlay.classList.add('visible');
+            }}
+
+            function closeOverlay() {{
+              overlay.classList.remove('visible');
+              overlayImg.src = '';
+            }}
+
+            posters.forEach(poster => {{
+              poster.style.cursor = 'zoom-in';
+              poster.addEventListener('click', (e) => {{
+                // Skip non-image fallback icons if any are marked with .no-image
+                if (poster.classList.contains('no-image')) return;
+                e.stopPropagation();
+                openOverlay(poster.src, poster.alt);
+              }});
+            }});
+
+            overlay.addEventListener('click', () => {{
+              closeOverlay();
+            }});
+
+            document.addEventListener('keydown', (e) => {{
+              if (e.key === 'Escape') {{
+                closeOverlay();
+              }}
+            }});
+          }}
+
+          if (document.readyState === 'loading') {{
+            document.addEventListener('DOMContentLoaded', setupPosterZoom);
+          }} else {{
+            setupPosterZoom();
+          }}
+        }})();
       </script>
     </head>
     <body>
