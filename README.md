@@ -18,6 +18,7 @@ It provides a html page showing what a Kodi device is playing and displays artwo
 - **Enhanced Video/Audio Information**: Real-time aspect ratio, container format, and accurate codec detection
 - **Studio/Tagline Display**: Production studio badges and movie/episode taglines
 - **Music Sample Rate/Record Label**: Enhanced audio information with kHz formatting and record label display
+- **Album Back Cover Flip**: Smooth front/back cover toggle for music albums
 - **Expandable Language Badges**: Interactive audio/subtitle language display with smart highlighting
 
 ## Playback Indicators
@@ -108,17 +109,40 @@ Enhanced audio information with improved formatting:
 - **Clean Badge Design**: Removed unnecessary prefixes for streamlined display
 - **Smart Extraction**: Properly extracts from album details API response
 
+## Album Back Cover Flip
+Interactive album artwork that reveals additional details when back cover art is available:
+- **Back Cover Detection**: Automatically loads back cover assets supplied by Kodi (e.g., `back`, `backcover`, `rear`)
+- **3D Flip Animation**: Smooth 180° horizontal flip between front and back covers
+- **Double-Click Trigger**: Toggle between front and back covers by double-clicking the album artwork
+- **Keyboard Accessible**: Toggle with Enter or Space when focused; focus outlines help when navigating via keyboard
+- **Contextual Indicator**: Subtle overlay text updates to show whether the front or back cover is currently displayed
+- **Zoom Compatibility**: Single-click zooms the cover; double-click flips between front/back without triggering zoom
+
+## Poster/Cover Zoom Functionality
+Interactive zoom feature for all media artwork that provides a detailed view:
+- **Universal Support**: Works with movie posters, TV show posters, TV season posters, and album covers
+- **Single-Click Zoom**: Click any poster or cover to view it in a larger, centered overlay
+- **Smooth Animation**: Elegant scale-up animation with fade effects when opening/closing
+- **Responsive Sizing**: Zoomed images scale up to ~4× original size (up to 80% of viewport) depending on screen size
+- **Visual Feedback**: Magnifying glass cursor (zoom-in) appears when hovering over clickable artwork
+- **Easy Dismissal**: Click anywhere on the dark overlay or press Escape to close the zoom view
+- **Album Cover Integration**: Single-click zooms album covers; double-click flips between front/back (when back cover available)
+- **Non-Image Exclusion**: Fallback icons (`.no-image`) are excluded from zoom functionality
+
 ## Expandable Language Badges
-Interactive audio and subtitle language display with intelligent highlighting:
+Interactive audio and subtitle language display with intelligent highlighting and real-time updates:
 - **Smart Clickability**: Only clickable when multiple languages are available
 - **Default View**: Shows currently playing language (e.g., "Audio: ENG")
 - **Expanded View**: Reveals all available languages with active language highlighted
 - **Visual Highlighting**: Green highlight box around the currently playing language
+- **Real-Time Updates**: Language badges automatically update when you switch audio/subtitle tracks in Kodi
+- **No Page Reload**: Seamless updates without refreshing the page
 - **Persistent Preferences**: Remembers your expansion preferences across sessions
 - **Smooth Animations**: Hover effects and transition animations
 - **Clean Readability**: Dark badge background with white text for optimal contrast
 - **Dual Source Detection**: Uses both InfoLabels (current) and streamdetails (all available)
 - **Smart Fallbacks**: Graceful handling when language data is incomplete
+- **Language Normalization**: Consistent language codes across different data sources
 
 ## Media Type Display Features
 
