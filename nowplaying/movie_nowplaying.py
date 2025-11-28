@@ -391,15 +391,21 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           from {{ transform: rotate(0deg); }}
           to  {{ transform: rotate(360deg); }}
         }}
-        .progress-container {{
-          width: 100%;
-          max-width: 100%;
+        .progress-wrapper {{
+          display: flex;
+          align-items: center;
+          gap: 12px;
           margin-top: 6px;
+          width: 100%;
+          max-width: 600px;
+          box-sizing: border-box;
+        }}
+        .progress-container {{
+          flex: 1;
+          min-width: 0;
           overflow: hidden;
           position: relative;
-          display: block;
-          flex-shrink: 0;
-          align-self: flex-start;
+          flex-shrink: 1;
         }}
         .progress {{
           background: #2a2a2a;
@@ -414,11 +420,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
             inset 0 5px 10px rgba(0,0,0,0.4);
           position: relative;
           width: 100%;
-          max-width: 600px;
-          min-width: 0;
-          flex-shrink: 0;
           box-sizing: border-box;
-          display: block;
         }}
         .bar {{
           background: linear-gradient(135deg, #4caf50 0%, #45a049 50%, #4caf50 100%);
@@ -900,19 +902,32 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
             const timeDisplay = document.getElementById('time-display');
             const button = timeDisplay.querySelector('#playback-button');
             const timeText = elapsedTime + ' / ' + totalTime;
-            console.log(`[DEBUG] Updating timer text: ${{timeText}}`);
             
             if (button) {{
-              // If button exists, replace all text content while preserving the button
-              const buttonHTML = button.outerHTML;
-              timeDisplay.innerHTML = buttonHTML + timeText;
-              // Re-cache the button reference since we recreated it
-              cachedButton = timeDisplay.querySelector('#playback-button');
-              console.log(`[DEBUG] Timer text updated with button`);
+              // If button exists, find or create a text node after the button
+              let textNode = button.nextSibling;
+              
+              // Check if next sibling is a text node
+              if (textNode && textNode.nodeType === Node.TEXT_NODE) {{
+                // Update existing text node
+                textNode.textContent = ' ' + timeText;
+              }} else {{
+                // Remove any non-text nodes after the button
+                while (textNode && textNode.id !== 'playback-button') {{
+                  const next = textNode.nextSibling;
+                  if (textNode.nodeType !== Node.TEXT_NODE) {{
+                    timeDisplay.removeChild(textNode);
+                  }}
+                  textNode = next;
+                }}
+                
+                // Create and append new text node after button
+                textNode = document.createTextNode(' ' + timeText);
+                timeDisplay.appendChild(textNode);
+              }}
             }} else {{
               // If no button, just update text
               timeDisplay.textContent = timeText;
-              console.log(`[DEBUG] Timer text updated without button`);
             }}
           }}
         }}
@@ -1406,9 +1421,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           {f"<h3 style='margin-top:20px;'>Plot</h3><p style='max-width:600px;'>{plot}</p>" if plot and plot.strip() else ""}
           <div class="badges">
             {rating_html}
-            <a href="{imdb_url}" target="_blank" class="badge-imdb">
-              <span>IMDb</span>
-            </a>
+            {f'<a href="{imdb_url}" target="_blank" class="badge-imdb"><span>IMDb</span></a>' if imdb_url else ''}
             {f"<span class='badge'>{resolution}</span>" if resolution else ""}
             {f"<span class='badge'>{aspect_ratio}</span>" if aspect_ratio else ""}
             <span class="badge">{video_codec}</span>
@@ -1426,16 +1439,16 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
             </span>
             {"".join(f"<span class='badge'>{g}</span>" for g in genre_badges)}
           </div>
-          <div class="progress-container">
-            <div class="progress">
-              <div class="bar"></div>
-            </div>
-          </div>
-          <div class="badges">
-            <span class="badge" id="time-display" style="display: flex; align-items: center; gap: 8px;">
+          <div class="progress-wrapper">
+            <span class="badge" id="time-display" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
               <img id="playback-button" src="/play-button.png" alt="Play" style="width: 20px; height: 20px; opacity: 1; transition: opacity 0.5s ease;">
               {f"{elapsed//60:02d}:{elapsed%60:02d}" if duration < 3600 else f"{elapsed//3600:02d}:{(elapsed//60)%60:02d}:{elapsed%60:02d}"} / {f"{duration//60:02d}:{duration%60:02d}" if duration < 3600 else f"{duration//3600:02d}:{(duration//60)%60:02d}:{duration%60:02d}"}
             </span>
+            <div class="progress-container">
+              <div class="progress">
+                <div class="bar"></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

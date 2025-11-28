@@ -585,11 +585,21 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           from {{ transform: rotate(0deg); }}
           to  {{ transform: rotate(360deg); }}
         }}
+        .progress-wrapper {{
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-top: 6px;
+          width: 100%;
+          max-width: 600px;
+          box-sizing: border-box;
+        }}
         .progress {{
+          flex: 1;
+          min-width: 0;
           background: #2a2a2a;
           border-radius: 15px;
           height: 20px;
-          margin-top: 6px;
           overflow: hidden;
           border: 1px solid rgba(0,0,0,0.75);
           box-shadow: 
@@ -1030,11 +1040,27 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
             const timeText = elapsedTime + ' / ' + totalTime;
             
             if (button) {{
-              // If button exists, replace all text content while preserving the button
-              const buttonHTML = button.outerHTML;
-              timeDisplay.innerHTML = buttonHTML + timeText;
-              // Re-cache the button reference since we recreated it
-              cachedButton = timeDisplay.querySelector('#playback-button');
+              // If button exists, find or create a text node after the button
+              let textNode = button.nextSibling;
+              
+              // Check if next sibling is a text node
+              if (textNode && textNode.nodeType === Node.TEXT_NODE) {{
+                // Update existing text node
+                textNode.textContent = ' ' + timeText;
+              }} else {{
+                // Remove any non-text nodes after the button
+                while (textNode && textNode.id !== 'playback-button') {{
+                  const next = textNode.nextSibling;
+                  if (textNode.nodeType !== Node.TEXT_NODE) {{
+                    timeDisplay.removeChild(textNode);
+                  }}
+                  textNode = next;
+                }}
+                
+                // Create and append new text node after button
+                textNode = document.createTextNode(' ' + timeText);
+                timeDisplay.appendChild(textNode);
+              }}
             }} else {{
               // If no button, just update text
               timeDisplay.textContent = timeText;
@@ -1606,14 +1632,14 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
               {f"<span class='badge'>{record_label}</span>" if record_label else ""}
               {"".join(f"<span class='badge'>{g}</span>" for g in genre_badges)}
             </div>
-            <div class="progress">
-              <div class="bar"></div>
-            </div>
-            <div class="badges">
-              <span class="badge" id="time-display" style="display: flex; align-items: center; gap: 8px;">
+            <div class="progress-wrapper">
+              <span class="badge" id="time-display" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
                 <img id="playback-button" src="/play-button.png" alt="Play" style="width: 20px; height: 20px; opacity: 1; transition: opacity 0.5s ease;">
                 {f"{elapsed//60:02d}:{elapsed%60:02d}" if duration < 3600 else f"{elapsed//3600:02d}:{(elapsed//60)%60:02d}:{elapsed%60:02d}"} / {f"{duration//60:02d}:{duration%60:02d}" if duration < 3600 else f"{duration//3600:02d}:{(duration//60)%60:02d}:{duration%60:02d}"}
               </span>
+              <div class="progress">
+                <div class="bar"></div>
+              </div>
             </div>
           </div>
           
