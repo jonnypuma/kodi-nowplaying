@@ -88,6 +88,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
     
     # Get enhanced video information using XBMC.GetInfoLabels for real-time data
     enhanced_video_info = {}
+    player_id = 1  # Default, will be updated if we can get active player
     try:
         # Import the kodi_rpc function from the main module
         import sys
@@ -99,6 +100,17 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
         kodi_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(kodi_module)
         kodi_rpc = kodi_module.kodi_rpc
+        
+        # Get active player ID
+        try:
+            active_players_response = kodi_rpc("Player.GetActivePlayers", {})
+            if active_players_response and active_players_response.get("result"):
+                active_players = active_players_response.get("result", [])
+                if active_players:
+                    player_id = active_players[0].get("playerid", 1)
+                    print(f"[DEBUG] Got active player ID: {player_id}", flush=True)
+        except Exception as e:
+            print(f"[DEBUG] Failed to get active player ID, using default 1: {e}", flush=True)
         
         print(f"[DEBUG] Attempting to get enhanced video info via XBMC.GetInfoLabels", flush=True)
         
@@ -117,6 +129,60 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
                 "VideoPlayer.Year"
             ]
         })
+        
+        # Try to get available audio streams using Player.GetProperties
+        try:
+            audio_streams_response = kodi_rpc("Player.GetProperties", {
+                "playerid": player_id,
+                "properties": ["audiostreams"]
+            })
+            print(f"[DEBUG] Player.GetProperties audiostreams response: {audio_streams_response}", flush=True)
+            
+            if audio_streams_response and audio_streams_response.get("result"):
+                audio_streams = audio_streams_response.get("result", {}).get("audiostreams", [])
+                print(f"[DEBUG] Available audio streams: {audio_streams}", flush=True)
+                
+                # Convert audio streams to our format
+                if audio_streams:
+                    audio_info = []
+                    for stream in audio_streams:
+                        if isinstance(stream, dict) and stream.get("language"):
+                            audio_info.append({
+                                "language": stream.get("language", ""),
+                                "name": stream.get("name", ""),
+                                "index": stream.get("index", 0),
+                                "codec": stream.get("codec", ""),
+                                "channels": stream.get("channels", 0)
+                            })
+                    print(f"[DEBUG] Converted audio_info from Player.GetProperties: {audio_info}", flush=True)
+        except Exception as e:
+            print(f"[DEBUG] Failed to get audio streams: {e}", flush=True)
+        
+        # Try to get available subtitle streams using Player.GetProperties
+        try:
+            subtitle_streams_response = kodi_rpc("Player.GetProperties", {
+                "playerid": player_id,
+                "properties": ["subtitles"]
+            })
+            print(f"[DEBUG] Player.GetProperties subtitles response: {subtitle_streams_response}", flush=True)
+            
+            if subtitle_streams_response and subtitle_streams_response.get("result"):
+                subtitle_streams = subtitle_streams_response.get("result", {}).get("subtitles", [])
+                print(f"[DEBUG] Available subtitle streams: {subtitle_streams}", flush=True)
+                
+                # Convert subtitle streams to our format
+                if subtitle_streams:
+                    subtitle_info = []
+                    for stream in subtitle_streams:
+                        if isinstance(stream, dict) and stream.get("language"):
+                            subtitle_info.append({
+                                "language": stream.get("language", ""),
+                                "name": stream.get("name", ""),
+                                "index": stream.get("index", 0)
+                            })
+                    print(f"[DEBUG] Converted subtitle_info from Player.GetProperties: {subtitle_info}", flush=True)
+        except Exception as e:
+            print(f"[DEBUG] Failed to get subtitle streams: {e}", flush=True)
         
         print(f"[DEBUG] XBMC.GetInfoLabels response: {infolabels_response}", flush=True)
         
@@ -171,8 +237,18 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
     current_audio = language_normalization.get(current_audio, current_audio)
     current_subtitle = language_normalization.get(current_subtitle, current_subtitle)
     
-    print(f"[DEBUG] Movie current audio: {current_audio}, all audio: {all_audio_languages}", flush=True)
-    print(f"[DEBUG] Movie current subtitle: {current_subtitle}, all subtitle: {all_subtitle_languages}", flush=True)
+    # Ensure current language is included in the all_languages list for expandable functionality
+    if current_audio and current_audio != "N/A" and current_audio not in all_audio_languages:
+        all_audio_languages.append(current_audio)
+        all_audio_languages = sorted(set(all_audio_languages))
+    if current_subtitle and current_subtitle != "N/A" and current_subtitle not in all_subtitle_languages:
+        all_subtitle_languages.append(current_subtitle)
+        all_subtitle_languages = sorted(set(all_subtitle_languages))
+    
+    print(f"[DEBUG] Movie current audio: {current_audio}, all audio: {all_audio_languages}, count: {len(all_audio_languages)}", flush=True)
+    print(f"[DEBUG] Movie current subtitle: {current_subtitle}, all subtitle: {all_subtitle_languages}, count: {len(all_subtitle_languages)}", flush=True)
+    print(f"[DEBUG] Movie audio badge will have expandable class: {len(all_audio_languages) > 1}", flush=True)
+    print(f"[DEBUG] Movie subtitle badge will have expandable class: {len(all_subtitle_languages) > 1}", flush=True)
     
     # Release year - try InfoLabels first, then fallback to item
     release_year = enhanced_video_info.get("VideoPlayer.Year", "")
@@ -283,7 +359,10 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
     # Playback progress
     elapsed = progress_data.get("elapsed", 0)
     duration = progress_data.get("duration", 0)
-    percent = int((elapsed / duration) * 100) if duration else 0
+    percent = round((elapsed / duration) * 100, 2) if duration else 0
+    # Ensure minimum 0.1% width when there's any progress to make it visible
+    if elapsed > 0 and percent < 0.1:
+        percent = 0.1
     paused = progress_data.get("paused", False)
     
     # Generate HTML
@@ -867,11 +946,25 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
 
         function updateTime() {{
           console.log(`[DEBUG] updateTime called: paused=${{paused}}, elapsed=${{elapsed}}, duration=${{duration}}`);
+          // Always update progress bar width based on current elapsed time
+          if (duration > 0) {{
+            let percent = (elapsed / duration) * 100;
+            // Ensure minimum 0.1% width when there's any progress to make it visible
+            if (elapsed > 0 && percent < 0.1) {{
+              percent = 0.1;
+            }}
+            // Round to 2 decimal places for smooth updates
+            percent = Math.round(percent * 100) / 100;
+            const bar = document.querySelector('.bar');
+            if (bar) {{
+              bar.style.width = percent + '%';
+              console.log(`[DEBUG] Progress bar updated: elapsed=${{elapsed}}, percent=${{percent}}%`);
+            }}
+          }}
+          
+          // Only increment elapsed time if playing
           if (!paused && elapsed < duration) {{
             elapsed++;
-            let percent = Math.floor((elapsed / duration) * 100);
-            document.querySelector('.bar').style.width = percent + '%';
-            console.log(`[DEBUG] Timer updated: elapsed=${{elapsed}}, percent=${{percent}}%`);
             
             // Format time based on duration
             let elapsedTime, totalTime;
@@ -939,6 +1032,21 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
               elapsed = data.elapsed;
               duration = data.duration;
               paused = data.paused;
+              
+              // Update progress bar width after syncing
+              if (duration > 0) {{
+                let percent = (elapsed / duration) * 100;
+                // Ensure minimum 0.1% width when there's any progress to make it visible
+                if (elapsed > 0 && percent < 0.1) {{
+                  percent = 0.1;
+                }}
+                // Round to 2 decimal places for smooth updates
+                percent = Math.round(percent * 100) / 100;
+                const bar = document.querySelector('.bar');
+                if (bar) {{
+                  bar.style.width = percent + '%';
+                }}
+              }}
             }});
         }}
 
@@ -1243,10 +1351,29 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
           }}
         }}
         
+        function initializeProgressBar() {{
+          // Initialize progress bar width on page load
+          if (duration > 0) {{
+            let percent = (elapsed / duration) * 100;
+            // Ensure minimum 0.1% width when there's any progress to make it visible
+            if (elapsed > 0 && percent < 0.1) {{
+              percent = 0.1;
+            }}
+            // Round to 2 decimal places for smooth updates
+            percent = Math.round(percent * 100) / 100;
+            const bar = document.querySelector('.bar');
+            if (bar) {{
+              bar.style.width = percent + '%';
+              console.log(`[DEBUG] Progress bar initialized: elapsed=${{elapsed}}, duration=${{duration}}, percent=${{percent}}%`);
+            }}
+          }}
+        }}
+        
         function initializeAll() {{
           // Wait a bit more for all elements to be rendered
           setTimeout(() => {{
             initializeButton();
+            initializeProgressBar();
             startShimmerTimer();
           }}, 200);
         }}

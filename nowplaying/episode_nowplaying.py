@@ -106,6 +106,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
     
     # Get enhanced video information using XBMC.GetInfoLabels for real-time data
     enhanced_video_info = {}
+    player_id = 1  # Default, will be updated if we can get active player
     try:
         # Import the kodi_rpc function from the main module
         import sys
@@ -117,6 +118,17 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
         kodi_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(kodi_module)
         kodi_rpc = kodi_module.kodi_rpc
+        
+        # Get active player ID
+        try:
+            active_players_response = kodi_rpc("Player.GetActivePlayers", {})
+            if active_players_response and active_players_response.get("result"):
+                active_players = active_players_response.get("result", [])
+                if active_players:
+                    player_id = active_players[0].get("playerid", 1)
+                    print(f"[DEBUG] Got active player ID: {player_id}", flush=True)
+        except Exception as e:
+            print(f"[DEBUG] Failed to get active player ID, using default 1: {e}", flush=True)
         
         print(f"[DEBUG] Attempting to get enhanced video info via XBMC.GetInfoLabels", flush=True)
         
@@ -136,10 +148,38 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
             ]
         })
         
+        # Try to get available audio streams using Player.GetProperties
+        try:
+            audio_streams_response = kodi_rpc("Player.GetProperties", {
+                "playerid": player_id,
+                "properties": ["audiostreams"]
+            })
+            print(f"[DEBUG] Player.GetProperties audiostreams response: {audio_streams_response}", flush=True)
+            
+            if audio_streams_response and audio_streams_response.get("result"):
+                audio_streams = audio_streams_response.get("result", {}).get("audiostreams", [])
+                print(f"[DEBUG] Available audio streams: {audio_streams}", flush=True)
+                
+                # Convert audio streams to our format
+                if audio_streams:
+                    audio_info = []
+                    for stream in audio_streams:
+                        if isinstance(stream, dict) and stream.get("language"):
+                            audio_info.append({
+                                "language": stream.get("language", ""),
+                                "name": stream.get("name", ""),
+                                "index": stream.get("index", 0),
+                                "codec": stream.get("codec", ""),
+                                "channels": stream.get("channels", 0)
+                            })
+                    print(f"[DEBUG] Converted audio_info from Player.GetProperties: {audio_info}", flush=True)
+        except Exception as e:
+            print(f"[DEBUG] Failed to get audio streams: {e}", flush=True)
+        
         # Try to get available subtitle streams using Player.GetProperties
         try:
             subtitle_streams_response = kodi_rpc("Player.GetProperties", {
-                "playerid": 1,
+                "playerid": player_id,
                 "properties": ["subtitles"]
             })
             print(f"[DEBUG] Player.GetProperties subtitles response: {subtitle_streams_response}", flush=True)
@@ -215,8 +255,18 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
     current_audio = language_normalization.get(current_audio, current_audio)
     current_subtitle = language_normalization.get(current_subtitle, current_subtitle)
     
-    print(f"[DEBUG] Episode current audio: {current_audio}, all audio: {all_audio_languages}", flush=True)
-    print(f"[DEBUG] Episode current subtitle: {current_subtitle}, all subtitle: {all_subtitle_languages}", flush=True)
+    # Ensure current language is included in the all_languages list for expandable functionality
+    if current_audio and current_audio != "N/A" and current_audio not in all_audio_languages:
+        all_audio_languages.append(current_audio)
+        all_audio_languages = sorted(set(all_audio_languages))
+    if current_subtitle and current_subtitle != "N/A" and current_subtitle not in all_subtitle_languages:
+        all_subtitle_languages.append(current_subtitle)
+        all_subtitle_languages = sorted(set(all_subtitle_languages))
+    
+    print(f"[DEBUG] Episode current audio: {current_audio}, all audio: {all_audio_languages}, count: {len(all_audio_languages)}", flush=True)
+    print(f"[DEBUG] Episode current subtitle: {current_subtitle}, all subtitle: {all_subtitle_languages}, count: {len(all_subtitle_languages)}", flush=True)
+    print(f"[DEBUG] Audio badge will have expandable class: {len(all_audio_languages) > 1}", flush=True)
+    print(f"[DEBUG] Subtitle badge will have expandable class: {len(all_subtitle_languages) > 1}", flush=True)
     
     # Release year - try InfoLabels first, then fallback to item
     release_year = enhanced_video_info.get("VideoPlayer.Year", "")
@@ -895,64 +945,110 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
         let paused = {str(paused).lower()};
         let lastPlaybackState = null;
         
-        // Expandable language badges functionality
-        document.addEventListener('DOMContentLoaded', function() {{
-          const languageBadges = document.querySelectorAll('.expandable-language');
+        // Function to attach expandable functionality to a badge
+        function attachExpandableHandler(badge) {{
+          if (badge.hasAttribute('data-handler-attached')) {{
+            console.log(`[DEBUG] Handler already attached to ${{badge.dataset.type}} badge`);
+            return; // Already has handler attached
+          }}
+          badge.setAttribute('data-handler-attached', 'true');
+          console.log(`[DEBUG] Attaching expandable handler to ${{badge.dataset.type}} badge`);
           
-          languageBadges.forEach(badge => {{
-            badge.addEventListener('click', function() {{
-              const isExpanded = this.classList.contains('expanded');
-              const currentLang = this.querySelector('.current-lang');
-              const allLangs = this.querySelector('.all-langs');
-              const currentLangText = this.dataset.current;
-              const allLangsText = this.dataset.all;
-              
-              if (isExpanded) {{
-                // Collapse: show only current language
-                this.classList.remove('expanded');
-                currentLang.style.display = 'inline';
-                allLangs.style.display = 'none';
-                // Store preference
-                localStorage.setItem('language-badge-expanded-' + this.dataset.type, 'false');
-              }} else {{
-                // Expand: show all languages with active language highlighted
-                this.classList.add('expanded');
-                currentLang.style.display = 'none';
-                
-                // Create highlighted language list
-                const languages = allLangsText.split(', ');
-                const highlightedLangs = languages.map(lang => {{
-                  const isActive = lang.trim() === currentLangText.trim();
-                  return isActive ? `<span class="active-language">${{lang}}</span>` : lang;
-                }}).join(', ');
-                
-                allLangs.innerHTML = highlightedLangs;
-                allLangs.style.display = 'inline';
-                // Store preference
-                localStorage.setItem('language-badge-expanded-' + this.dataset.type, 'true');
-              }}
-            }});
+          badge.addEventListener('click', function(e) {{
+            e.stopPropagation();
+            console.log(`[DEBUG] Clicked on ${{this.dataset.type}} badge`);
+            const isExpanded = this.classList.contains('expanded');
+            const currentLang = this.querySelector('.current-lang');
+            const allLangs = this.querySelector('.all-langs');
+            const currentLangText = this.dataset.current;
+            const allLangsText = this.dataset.all;
             
-            // Restore saved preference
-            const savedState = localStorage.getItem('language-badge-expanded-' + badge.dataset.type);
-            if (savedState === 'true') {{
-              badge.classList.add('expanded');
-              badge.querySelector('.current-lang').style.display = 'none';
+            console.log(`[DEBUG] Badge state: expanded=${{isExpanded}}, currentLang=${{currentLangText}}, allLangs=${{allLangsText}}`);
+            
+            if (isExpanded) {{
+              // Collapse: show only current language
+              this.classList.remove('expanded');
+              currentLang.style.display = 'inline';
+              allLangs.style.display = 'none';
+              // Store preference
+              localStorage.setItem('language-badge-expanded-' + this.dataset.type, 'false');
+              console.log(`[DEBUG] Collapsed ${{this.dataset.type}} badge`);
+            }} else {{
+              // Expand: show all languages with active language highlighted
+              this.classList.add('expanded');
+              currentLang.style.display = 'none';
               
-              // Create highlighted language list for restored state
-              const currentLangText = badge.dataset.current;
-              const allLangsText = badge.dataset.all;
+              // Create highlighted language list
               const languages = allLangsText.split(', ');
               const highlightedLangs = languages.map(lang => {{
                 const isActive = lang.trim() === currentLangText.trim();
                 return isActive ? `<span class="active-language">${{lang}}</span>` : lang;
               }}).join(', ');
               
-              badge.querySelector('.all-langs').innerHTML = highlightedLangs;
-              badge.querySelector('.all-langs').style.display = 'inline';
+              allLangs.innerHTML = highlightedLangs;
+              allLangs.style.display = 'inline';
+              // Store preference
+              localStorage.setItem('language-badge-expanded-' + this.dataset.type, 'true');
+              console.log(`[DEBUG] Expanded ${{this.dataset.type}} badge`);
             }}
           }});
+        }}
+        
+        // Function to initialize expandable language badges
+        function initializeExpandableBadges() {{
+          // Check all badges with data-type attribute, not just those with expandable-language class
+          const allLanguageBadges = document.querySelectorAll('.badge[data-type="audio"], .badge[data-type="subtitle"]');
+          console.log(`[DEBUG] initializeExpandableBadges: Found ${{allLanguageBadges.length}} language badges`);
+          
+          allLanguageBadges.forEach(badge => {{
+            const allLangsText = badge.dataset.all;
+            const langCount = allLangsText ? allLangsText.split(', ').filter(l => l.trim()).length : 0;
+            console.log(`[DEBUG] Badge type: ${{badge.dataset.type}}, languages: "${{allLangsText}}", count: ${{langCount}}`);
+            
+            if (langCount > 1) {{
+              badge.classList.add('expandable-language');
+              console.log(`[DEBUG] Added expandable-language class to ${{badge.dataset.type}} badge`);
+              attachExpandableHandler(badge);
+              
+              // Restore saved preference
+              const savedState = localStorage.getItem('language-badge-expanded-' + badge.dataset.type);
+              if (savedState === 'true') {{
+                badge.classList.add('expanded');
+                const currentLang = badge.querySelector('.current-lang');
+                const allLangs = badge.querySelector('.all-langs');
+                if (currentLang) currentLang.style.display = 'none';
+                
+                // Create highlighted language list for restored state
+                const currentLangText = badge.dataset.current;
+                const allLangsText = badge.dataset.all;
+                const languages = allLangsText.split(', ').filter(l => l.trim());
+                const highlightedLangs = languages.map(lang => {{
+                  const isActive = lang.trim() === currentLangText.trim();
+                  return isActive ? `<span class="active-language">${{lang}}</span>` : lang;
+                }}).join(', ');
+                
+                if (allLangs) {{
+                  allLangs.innerHTML = highlightedLangs;
+                  allLangs.style.display = 'inline';
+                }}
+              }}
+            }} else {{
+              console.log(`[DEBUG] Badge ${{badge.dataset.type}} has only ${{langCount}} language(s), not making expandable`);
+            }}
+          }});
+        }}
+        
+        // Expandable language badges functionality
+        document.addEventListener('DOMContentLoaded', function() {{
+          console.log('[DEBUG] DOMContentLoaded fired, initializing expandable badges');
+          initializeExpandableBadges();
         }});
+        
+        // Also try after a short delay in case badges are added dynamically
+        setTimeout(function() {{
+          console.log('[DEBUG] Delayed initialization of expandable badges');
+          initializeExpandableBadges();
+        }}, 500);
 
         function updateTime() {{
           if (!paused && elapsed < duration) {{
@@ -1158,8 +1254,25 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
         }}
         
         function updateLanguageBadge(type, newLanguage) {{
-          const badge = document.querySelector(`.badge[data-type="${{type}}"]`);
+          // Try multiple selectors to find the badge
+          let badge = document.querySelector(`span.badge[data-type="${{type}}"]`);
+          if (!badge) {{
+            badge = document.querySelector(`.badge[data-type="${{type}}"]`);
+          }}
+          if (!badge) {{
+            // Try finding by the text content
+            const badges = document.querySelectorAll('.badge');
+            for (let b of badges) {{
+              if (b.dataset.type === type) {{
+                badge = b;
+                break;
+              }}
+            }}
+          }}
+          
           if (badge) {{
+            console.log(`[DEBUG] Found ${{type}} badge`);
+            console.log(`[DEBUG] Badge HTML:`, badge.outerHTML.substring(0, 200));
             const currentLangSpan = badge.querySelector('.current-lang');
             if (currentLangSpan) {{
               currentLangSpan.textContent = newLanguage;
@@ -1169,12 +1282,43 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
             // Update the data-current attribute
             badge.dataset.current = newLanguage;
             
+            // Ensure expandable-language class is present if there are multiple languages
+            let allLangsText = badge.dataset.all;
+            console.log(`[DEBUG] updateLanguageBadge for ${{type}}: allLangsText="${{allLangsText}}", has expandable class: ${{badge.classList.contains('expandable-language')}}`);
+            
+            // If allLangsText is empty or only has one language, try to get available languages from Player.GetProperties
+            if (!allLangsText || allLangsText.split(', ').filter(l => l.trim()).length <= 1) {{
+              console.log(`[DEBUG] ${{type}} badge has insufficient languages, attempting to fetch from player...`);
+              // For now, we'll rely on the data-all attribute being set correctly in HTML
+              // But we can try to re-initialize the badge
+              initializeExpandableBadges();
+              allLangsText = badge.dataset.all; // Re-read after initialization
+            }}
+            
+            if (allLangsText) {{
+              const languages = allLangsText.split(', ').filter(l => l.trim());
+              const langCount = languages.length;
+              console.log(`[DEBUG] Language count for ${{type}}: ${{langCount}}, languages: ${{JSON.stringify(languages)}}`);
+              
+              if (langCount > 1) {{
+                badge.classList.add('expandable-language');
+                console.log(`[DEBUG] Added expandable-language class to ${{type}} badge`);
+                // Ensure click handler is attached
+                attachExpandableHandler(badge);
+                console.log(`[DEBUG] Attached expandable handler to ${{type}} badge`);
+              }} else {{
+                console.log(`[DEBUG] Not adding expandable class - only ${{langCount}} language(s) available: ${{languages}}`);
+              }}
+            }} else {{
+              console.log(`[DEBUG] No allLangsText found for ${{type}} badge`);
+            }}
+            
             // If the badge is expanded, update the highlighted language
             if (badge.classList.contains('expanded')) {{
               const allLangsSpan = badge.querySelector('.all-langs');
               if (allLangsSpan) {{
                 const allLangsText = badge.dataset.all;
-                const languages = allLangsText.split(', ');
+                const languages = allLangsText.split(', ').filter(l => l.trim());
                 const highlightedLangs = languages.map(lang => {{
                   const isActive = lang.trim() === newLanguage.trim();
                   return isActive ? `<span class="active-language">${{lang}}</span>` : lang;
@@ -1184,6 +1328,16 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
                 console.log(`[DEBUG] Updated expanded ${{type}} badge highlighting`);
               }}
             }}
+          }} else {{
+            console.log(`[DEBUG] Badge not found for type: ${{type}}`);
+            // Try to find it after a short delay
+            setTimeout(() => {{
+              const badge = document.querySelector(`span.badge[data-type="${{type}}"]`) || document.querySelector(`.badge[data-type="${{type}}"]`);
+              if (badge) {{
+                console.log(`[DEBUG] Found ${{type}} badge after delay, updating...`);
+                updateLanguageBadge(type, newLanguage);
+              }}
+            }}, 100);
           }}
         }}
         
@@ -1529,9 +1683,9 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
               <span class="badge">{audio_codec} {channels}ch</span>
               <span class="badge">{hdr_type}</span>
               {f"<span class='badge'>{studio_names}</span>" if studio_names else ""}
-              <span class="badge {'expandable-language' if len(all_audio_languages) > 1 else ''}" data-current="{current_audio}" data-all="{', '.join(all_audio_languages)}" data-type="audio">
+              <span class="badge{' expandable-language' if len(all_audio_languages) > 1 else ''}" data-current="{current_audio}" data-all="{', '.join(all_audio_languages) if all_audio_languages else current_audio}" data-type="audio">
                 Audio: <span class="current-lang">{current_audio}</span>
-                <span class="all-langs" style="display: none;">{', '.join(all_audio_languages)}</span>
+                <span class="all-langs" style="display: none;">{', '.join(all_audio_languages) if all_audio_languages else current_audio}</span>
               </span>
               <span class="badge {'expandable-language' if len(all_subtitle_languages) > 1 else ''}" data-current="{current_subtitle}" data-all="{', '.join(all_subtitle_languages)}" data-type="subtitle">
                 Subs: <span class="current-lang">{current_subtitle}</span>
