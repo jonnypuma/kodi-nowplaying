@@ -19,7 +19,9 @@ def infer_playback_type(item):
         return "episode"
     if item.get("album") and item.get("artist"):
         return "song"
-    if item.get("title") and not item.get("showtitle") and item.get("type") != "unknown":
+    # For unknown types, infer based on content: if it has a title but no showtitle/album,
+    # treat it as a movie (covers YouTube videos, trailers, etc.)
+    if item.get("title") and not item.get("showtitle"):
         return "movie"
     return "unknown"
 
