@@ -675,10 +675,10 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
         .logo {{
           display: block;
           margin-bottom: 10px;
-          max-height: 150px;
+          height: 150px;
           width: auto;
-          height: auto;
           object-fit: contain;
+          object-position: left center;
           text-align: left;
         }}
         .clearart {{

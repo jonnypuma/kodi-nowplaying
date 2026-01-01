@@ -602,7 +602,10 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
         .logo {{
           display: block;
           margin-bottom: 10px;
-          max-height: 90px;
+          height: 150px;
+          width: auto;
+          object-fit: contain;
+          object-position: left center;
         }}
         .clearart {{
           display: block;
@@ -1542,7 +1545,7 @@ def generate_html(item, session_id, downloaded_art, progress_data, details):
         <div>
           {f"<img class='logo' src='{clearlogo_url}' />" if clearlogo_url else (f"<img class='banner' src='{banner_url}' />" if banner_url else f"<h2 style='margin-bottom: 4px;'>🎬 {title}</h2>")}
           {f"<p style='font-style: italic; color: #ccc; margin-top: 8px;'>{tagline}</p>" if tagline else ""}
-          {f"<p><strong>Release year:</strong> {release_year}</p>" if release_year else ""}
+          {f"<p><strong>Year:</strong> {release_year}</p>" if release_year else ""}
           {f"<p><strong>Director:</strong> {director_names}</p>" if director_names and director_names != "N/A" else ""}
           {f"<p><strong>Cast:</strong> {cast_names}</p>" if cast_names and cast_names != "N/A" else ""}
           {f"<h3 style='margin-top:20px;'>Plot</h3><p style='max-width:600px;'>{plot}</p>" if plot and plot.strip() else ""}

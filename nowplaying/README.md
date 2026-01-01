@@ -166,7 +166,7 @@ The application provides specialized displays and artwork for different media ty
 - Audio information (channels, codec, container format)
 - Interactive language badges (audio/subtitle with expandable view)
 - Studio information and tagline
-- Release year and director information
+- Year and director information
 - Playback progress and time remaining
 
 ### Movies
@@ -186,7 +186,7 @@ The application provides specialized displays and artwork for different media ty
 - Audio information (channels, codec, container format)
 - Interactive language badges (audio/subtitle with expandable view)
 - Studio information and tagline
-- Release year and director information
+- Year and director information
 - Playback progress and total runtime
 
 ### Music
@@ -198,7 +198,7 @@ The application provides specialized displays and artwork for different media ty
 
 **Information Displayed:**
 - Artist name and song title
-- Album name and release year
+- Album name and year
 - Genre and music quality information
 - Audio codec and container format
 - Sample rate (kHz) and bitrate information
@@ -233,6 +233,7 @@ Each media type follows a sophisticated fallback hierarchy to ensure optimal vis
 - **Seamless Fallbacks**: Transitions between artwork types are smooth and automatic
 - **Quality Priority**: Always displays the highest quality artwork available
 - **Responsive Scaling**: All artwork types scale appropriately for different screen sizes
+- **Clearlogo Normalization**: All clearlogos are normalized to a consistent height (150px) while preserving aspect ratio for uniform display across all media types
 
 ### Background Slideshow
 When multiple fanart images are available:
